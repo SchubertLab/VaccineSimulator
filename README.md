@@ -11,7 +11,7 @@ git clone git@github.com:SchubertLab/VaccineSimulator.git
 access the repository directory and run the following commands to create a conda environment with all initial requirements:
 
 ```
-conda env create -f environment.yaml -y && conda activate VaccineSimulator && conda install nb_conda_kernels -y
+conda env create -f environment.yaml -y && conda activate vaccineSimulator && conda install nb_conda_kernels -y
 ```
 
 You can find an introduction to the dataset and project under notebooks/introduction.ipynb
