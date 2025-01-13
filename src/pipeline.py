@@ -18,14 +18,16 @@ import matplotlib.pyplot as plt
 def pipeline(data, embedding, outcome_variable, clone_pairing_method, split, model):
 
     # TODO include outcome variable in the pipeline
-
     if embedding == "pca":
-        transformed_data = create_pca_embeddings()
+        transformed_data = create_pca_embeddings(data)
 
+    transformed_data = clone_aggregation(transformed_data)
     if clone_pairing_method == "time_point":
         cell_paring(transformed_data)
     elif clone_pairing_method == "optimal_transport":
         optimal_transport(transformed_data)
+    elif clone_pairing_method == "random":
+        random_pairing(transformed_data)
 
     if split == "timepoint":
         train_test_split(transformed_data)
@@ -41,12 +43,63 @@ def pipeline(data, embedding, outcome_variable, clone_pairing_method, split, mod
     return model_s1, model_t1, data
 
 def create_pca_embeddings(data):
-    sc.tl.pca(data.adata, n_comps=10) # Perform PCA -> use 10 components since they explain 90% of the variance (plot)
-    sc.pl.pca(data.adata) # Plot only the top two principal components as they are most informative
-    sc.pl.pca_variance_ratio(data.adata, n_pcs=10) 
+    sc.tl.pca(data, n_comps=10) # Perform PCA -> use 10 components since they explain 90% of the variance (plot)
+    sc.pl.pca(data) # Plot only the top two principal components as they are most informative
+    sc.pl.pca_variance_ratio(data, n_pcs=15) 
+    return data
 
+def clone_aggregation(adata):
+    # filter out cells that we can't use
+    adata = adata[~adata.obs.clone_id.isna()]
+    adata = adata[~(adata.obs.clone_id=='nan')]
+    adata = adata[~(adata.obs.time.isin(['X3','extra']))]
 
-def cell_paring(data):
+    # Filter for time points
+    P1_mask = adata.obs["time"] == "P1"
+    S1_mask = adata.obs["time"] == "S1"
+    T1_mask = adata.obs["time"] == "T1"
+
+    # Features: Embeddings from P1
+    self.X = adata[P1_mask].obsm["X_pca"]
+
+    # get target variable and clones from S1 and T1
+    self.S1_clones = adata[S1_mask].obs["clone_id"].values  # Clonotypes at S1
+    self.S1_targets = adata[S1_mask].obs["IFN Response_score"].values # target variable
+
+    self.T1_clones = adata[T1_mask].obs["clone_id"].values  # Clonotypes at T1
+    self.T1_targets = adata[T1_mask].obs["IFN Response_score"].values # target variable
+    self.P1_clones = adata[P1_mask].obs["clone_id"].values
+    return adata
+
+def random_pairing(adata):
+    # alternative: random pairing of cells - baseline model
+    # Random pairing of cells
+    random_indices_s1 = np.random.permutation(len(self.S1_targets))
+    random_indices_t1 = np.random.permutation(len(self.T1_targets))
+
+    # Shuffle and align S1 and T1 responses with P1 clones randomly
+    s1_random = self.S1_targets[random_indices_s1[:len(self.P1_clones)]]
+    t1_random = self.T1_targets[random_indices_t1[:len(self.P1_clones)]]
+
+    # Aggregate features for training
+    X_aggregated = []
+    y_s1_aggregated = []
+    y_t1_aggregated = []
+
+    for clone in np.unique(self.P1_clones):
+        mask = self.P1_clones == clone  # Select rows for the current clone
+        X_aggregated.append(self.X[mask].mean(axis=0))  # Mean of features
+        y_s1_aggregated.append(s1_random[mask].mean())  # Randomized S1 response
+        y_t1_aggregated.append(t1_random[mask].mean())  # Randomized T1 response
+
+    # Convert to arrays
+    X_aggregated = np.array(X_aggregated)
+    y_s1_aggregated = np.array(y_s1_aggregated)
+    y_t1_aggregated = np.array(y_t1_aggregated)
+
+    return adata
+
+def cell_paring(adata):
 
     # filter out cells that we can't use
     adata = adata[~adata.obs.clone_id.isna()]

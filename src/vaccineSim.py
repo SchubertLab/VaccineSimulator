@@ -67,8 +67,9 @@ class run(object):
                 self.results = None
                 self.model_stats = None
 
+    
                 # quality check of parameters
-                self.model_s1, self.model_t1, data = pipeline.pipeline(self.adata, self.embedding_method, self.outcome_variable, self.clone_pairing_method, self.split, self.model)
+                self.model_s1, self.model_t1, data = pipeline.pipeline(adata, self.embedding_method, self.outcome_variable, self.clone_pairing_method, self.split, self.model)
 
                 # eval results
                 eval.eval(data)
