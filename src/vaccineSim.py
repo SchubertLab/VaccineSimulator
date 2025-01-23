@@ -69,17 +69,18 @@ class run(object):
 
     
                 # quality check of parameters
-                self.model_s1, self.model_t1, data = pipeline.pipeline(adata, self.embedding_method, self.outcome_variable, self.clone_pairing_method, self.split, self.model)
+                simulation = pipeline.pipeline()
+                self.model_s1, self.model_t1, data = simulation.pipeline(adata, self.embedding_method, self.outcome_variable, self.clone_pairing_method, self.split, self.model)
 
                 # eval results
-                eval.eval(data)
+                evaluation = eval.eval()
+                evaluation.eval(data)
                     
 
                     
                     
     def get_results(self):
         return  self.results
-
 
     def get_model_stats(self):
         return self.model_stats
