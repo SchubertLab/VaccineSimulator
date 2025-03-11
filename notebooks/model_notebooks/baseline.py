@@ -48,6 +48,82 @@ embeddings = ['X_pca', 'deepTCR_VAE_dim64', 'X_mvTCR', 'emb_deepTCR_PCA', 'emb_m
 
 oversampling = False
 
+def recall_at_k_clonotype(y_true, y_pred, k):
+    """
+    Compute recall at K based on clonotype-level responsiveness.
+
+    Args:
+        y_true (array-like): True responses for each cell.
+        y_pred (array-like): Predicted responses for each cell.
+        k (int): Number of top clonotypes to consider.
+
+    Returns:
+        float: Recall at K based on clonotypes.
+
+        
+    """
+    
+    # Aggregate responses by clonotype
+    true_responses_by_clonotype = aggregate_predictions_by_clonotype(y_true)
+    pred_responses_by_clonotype = aggregate_predictions_by_clonotype(y_pred)
+
+    # Sort clonotypes by their average true and predicted responses -> # TODO why? 
+    top_k_true_clonotypes = sorted(
+        true_responses_by_clonotype, key=true_responses_by_clonotype.get, reverse=True
+    )[:k]
+    top_k_pred_clonotypes = sorted(
+        pred_responses_by_clonotype, key=pred_responses_by_clonotype.get, reverse=True
+    )[:k]
+
+    # Compute the intersection of top-k true and predicted clonotypes
+    intersection = set(top_k_true_clonotypes) & set(top_k_pred_clonotypes)
+
+    # Compute Recall@K
+    recall_k = len(intersection) / k
+    return recall_k
+
+
+def mse_clonotype(y_pred, y_true):
+    """
+    Aggregate responses by clonotype and calculate MSE per clonotype.
+
+    Args:
+        y_pred (array-like): Predicted responses for each cell.
+        y_true (array-like): True responses for each cell.
+
+    Returns:
+        dict: A dictionary mapping each clonotype to its predicted responses and MSE.
+        float: The mean MSE across all clonotypes.
+    """
+
+    # Get the clonotype labels for the test set (assumed to be pre-defined)
+    test_clonotype_labels = unique_clonotypes_aggregated[test_mask]  # Make sure test_mask is defined
+     
+    # Create an empty dictionary to store predictions and MSE for each clonotype
+    predictions_by_clonotype = {}
+    mse_by_clonotype = {}
+
+    # Iterate over each unique clonotype in the test set
+    for clonotype in np.unique(test_clonotype_labels):
+        # Get indices of the test samples corresponding to this clonotype
+        clonotype_mask = test_clonotype_labels == clonotype
+
+        # Get the predicted values and true values for this clonotype
+        clonotype_predictions = y_pred[clonotype_mask]
+        clonotype_true_values = y_true[clonotype_mask]
+
+        # Calculate the MSE for this clonotype
+        mse = mean_squared_error(clonotype_true_values, clonotype_predictions)
+
+        # Store predictions and MSE in the dictionary
+        predictions_by_clonotype[clonotype] = clonotype_predictions
+        mse_by_clonotype[clonotype] = mse
+
+    # Calculate the mean MSE across all clonotypes
+    mean_mse = np.mean(list(mse_by_clonotype.values()))
+
+    return mse_by_clonotype, mean_mse
+
 def recall_at_k(y_true, y_pred, k):
     # Get the indices of the top-k predicted scores
     top_k_pred_indices = np.argsort(y_pred)[-k:]  # Indices of top-k predicted scores
@@ -200,38 +276,64 @@ for k in range(0,7):
 
     #Evaluation
 
-    k = 5
+    k = 5  # Recall@k setting
 
+    # --- Standard Evaluation ---
     # Evaluate S1 predictions
     mse_s1 = mean_squared_error(y_s1_test, y_s1_pred)
-    mean_clonotype_activation_s1_predicted = y_s1_pred.mean()  # Predicted mean activation
-    mean_clonotype_activation_s1 = y_s1_test.mean()            # True mean activation
-    recall_ks1 = recall_at_k(y_s1_test, y_s1_pred, k)          # Assumes recall_at_k is defined
+    mse_s1_clonotype, mse_s1_mean = mse_clonotype(y_s1_test, y_s1_pred)
+    recall_ks1 = recall_at_k_clonotype(y_s1_test, y_s1_pred, k)
+
+    mean_clonotype_activation_s1_predicted = y_s1_pred.mean()
+    mean_clonotype_activation_s1 = y_s1_test.mean()
 
     print(f"Recall@{k} for S1: {recall_ks1:.2f}")
-    print(f"MSE for S1: {mse_s1}")
+    print(f"MSE- Mean for S1: {mse_s1}")
+    print(f"MSE- Clonotype mean for S1: {mse_s1_mean}")
     print(f"Mean Clonotype Activation (S1): {mean_clonotype_activation_s1:.4f}")
     print(f"Mean Clonotype Activation (S1) Predicted: {mean_clonotype_activation_s1_predicted:.4f}")
 
-    # Evaluate T1 predictions
+    # --- Quartile MSE Analysis for S1 ---
+    # Sort clones by true response level
+    sorted_indices_s1 = np.argsort(y_s1_test)
+
+    # Get quartile indices
+    q1_s1 = sorted_indices_s1[: len(sorted_indices_s1) // 4]  # Bottom 25% (low responders)
+    q4_s1 = sorted_indices_s1[-len(sorted_indices_s1) // 4:]  # Top 25% (high responders)
+
+    # Compute MSE for the two quartiles
+    mse_s1_low = mean_squared_error(y_s1_test[q1_s1], y_s1_pred[q1_s1])
+    mse_s1_high = mean_squared_error(y_s1_test[q4_s1], y_s1_pred[q4_s1])
+
+    print(f"MSE for bottom 25% (low-responding clones) in S1: {mse_s1_low:.4f}")
+    print(f"MSE for top 25% (high-responding clones) in S1: {mse_s1_high:.4f}")
+
+
+    # --- Standard Evaluation for T1 ---
     mse_t1 = mean_squared_error(y_t1_test, y_t1_pred)
-    recall_kt1 = recall_at_k(y_t1_test, y_t1_pred, k)
+    mse_t1_clonotype, mse_t1_mean = mse_clonotype(y_t1_test, y_t1_pred)
+    recall_kt1 = recall_at_k_clonotype(y_t1_test, y_t1_pred, k)
+
     mean_clonotype_activation_t1 = y_t1_test.mean()
     mean_clonotype_activation_t1_predicted = y_t1_pred.mean()
 
     print(f"Recall@{k} for T1: {recall_kt1:.2f}")
-    print(f"MSE for T1: {mse_t1}")
+    print(f"MSE- Mean for T1: {mse_t1}")
+    print(f"MSE- Clonotype mean for T1: {mse_t1_mean}")
     print(f"Mean Clonotype Activation (T1): {mean_clonotype_activation_t1:.4f}")
     print(f"Mean Clonotype Activation (T1) Predicted: {mean_clonotype_activation_t1_predicted:.4f}")
 
-    print(f"{recall_ks1:.2f}")
-    print(f"{mse_s1:.4f}")
-    print(f"{mean_clonotype_activation_s1:.4f}")
-    print(f"{mean_clonotype_activation_s1_predicted:.4f}")
+    # --- Quartile MSE Analysis for T1 ---
+    sorted_indices_t1 = np.argsort(y_t1_test)
 
-    print(f"{recall_kt1:.2f}")
-    print(f"{mse_t1:.4f}")
-    print(f"{mean_clonotype_activation_t1:.4f}")
-    print(f"{mean_clonotype_activation_t1_predicted:.4f}")
+    q1_t1 = sorted_indices_t1[: len(sorted_indices_t1) // 4]  # Bottom 25%
+    q4_t1 = sorted_indices_t1[-len(sorted_indices_t1) // 4:]  # Top 25%
+
+    mse_t1_low = mean_squared_error(y_t1_test[q1_t1], y_t1_pred[q1_t1])
+    mse_t1_high = mean_squared_error(y_t1_test[q4_t1], y_t1_pred[q4_t1])
+
+    print(f"MSE for bottom 25% (low-responding clones) in T1: {mse_t1_low:.4f}")
+    print(f"MSE for top 25% (high-responding clones) in T1: {mse_t1_high:.4f}")
+
 
 
