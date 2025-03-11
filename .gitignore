@@ -3,3 +3,4 @@ models/
 .ipynb_checkpoints
 *.h5ad
 .DS_Store
+notebooks/pill3_performance_measures_student.ipynb
