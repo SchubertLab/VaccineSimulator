@@ -546,8 +546,8 @@ for k in range(0,7):
         print(f"MSE for bottom 25% (low-responding clones) in S1: {mse_s1_low:.4f}")
         print(f"MSE for top 25% (high-responding clones) in S1: {mse_s1_high:.4f}")
 
-        print(q1_s1)
-        print(q4_s1)
+        # print(q1_s1)
+        # print(q4_s1)
 
         # --- Standard Evaluation for T1 ---
         mse_t1 = mean_squared_error(y_t1_test, y_t1_pred_lr)
@@ -580,11 +580,11 @@ for k in range(0,7):
 
         # --- Standard Evaluation ---
         # Evaluate S1 predictions
-        mse_s1 = mean_squared_error(y_s1_test, y_s1_pred_lr)
-        mse_s1_clonotype, mse_s1_mean = mse_clonotype(y_s1_test, y_s1_pred_lr)
-        recall_ks1 = recall_at_k_clonotype(y_s1_test, y_s1_pred_lr, k)
+        mse_s1 = mean_squared_error(y_s1_test, y_s1_pred_gb)
+        mse_s1_clonotype, mse_s1_mean = mse_clonotype(y_s1_test, y_s1_pred_gb)
+        recall_ks1 = recall_at_k_clonotype(y_s1_test, y_s1_pred_gb, k)
 
-        mean_clonotype_activation_s1_predicted = y_s1_pred_lr.mean()
+        mean_clonotype_activation_s1_predicted = y_s1_pred_gb.mean()
         mean_clonotype_activation_s1 = y_s1_test.mean()
 
         print(f"Recall@{k} for S1: {recall_ks1:.2f}")
@@ -602,22 +602,22 @@ for k in range(0,7):
         q4_s1 = sorted_indices_s1[-len(sorted_indices_s1) // 4:]  # Top 25% (high responders)
 
         # Compute MSE for the two quartiles
-        mse_s1_low = mean_squared_error(y_s1_test[q1_s1], y_s1_pred_lr[q1_s1])
-        mse_s1_high = mean_squared_error(y_s1_test[q4_s1], y_s1_pred_lr[q4_s1])
+        mse_s1_low = mean_squared_error(y_s1_test[q1_s1], y_s1_pred_gb[q1_s1])
+        mse_s1_high = mean_squared_error(y_s1_test[q4_s1], y_s1_pred_gb[q4_s1])
 
         print(f"MSE for bottom 25% (low-responding clones) in S1: {mse_s1_low:.4f}")
         print(f"MSE for top 25% (high-responding clones) in S1: {mse_s1_high:.4f}")
 
-        print(q1_s1)
-        print(q4_s1)
+        # print(q1_s1)
+        # print(q4_s1)
 
         # --- Standard Evaluation for T1 ---
-        mse_t1 = mean_squared_error(y_t1_test, y_t1_pred_lr)
-        mse_t1_clonotype, mse_t1_mean = mse_clonotype(y_t1_test, y_t1_pred_lr)
-        recall_kt1 = recall_at_k_clonotype(y_t1_test, y_t1_pred_lr, k)
+        mse_t1 = mean_squared_error(y_t1_test, y_t1_pred_gb)
+        mse_t1_clonotype, mse_t1_mean = mse_clonotype(y_t1_test, y_t1_pred_gb)
+        recall_kt1 = recall_at_k_clonotype(y_t1_test, y_t1_pred_gb, k)
 
         mean_clonotype_activation_t1 = y_t1_test.mean()
-        mean_clonotype_activation_t1_predicted = y_t1_pred_lr.mean()
+        mean_clonotype_activation_t1_predicted = y_t1_pred_gb.mean()
 
         print(f"Recall@{k} for T1: {recall_kt1:.2f}")
         print(f"MSE- Mean for T1: {mse_t1}")
@@ -631,8 +631,8 @@ for k in range(0,7):
         q1_t1 = sorted_indices_t1[: len(sorted_indices_t1) // 4]  # Bottom 25%
         q4_t1 = sorted_indices_t1[-len(sorted_indices_t1) // 4:]  # Top 25%
 
-        mse_t1_low = mean_squared_error(y_t1_test[q1_t1], y_t1_pred_lr[q1_t1])
-        mse_t1_high = mean_squared_error(y_t1_test[q4_t1], y_t1_pred_lr[q4_t1])
+        mse_t1_low = mean_squared_error(y_t1_test[q1_t1], y_t1_pred_gb[q1_t1])
+        mse_t1_high = mean_squared_error(y_t1_test[q4_t1], y_t1_pred_gb[q4_t1])
 
         print(f"MSE for bottom 25% (low-responding clones) in T1: {mse_t1_low:.4f}")
         print(f"MSE for top 25% (high-responding clones) in T1: {mse_t1_high:.4f}")
@@ -642,11 +642,11 @@ for k in range(0,7):
 
         # --- Standard Evaluation ---
         # Evaluate S1 predictions
-        mse_s1 = mean_squared_error(y_s1_test, y_s1_pred_lr)
-        mse_s1_clonotype, mse_s1_mean = mse_clonotype(y_s1_test, y_s1_pred_lr)
-        recall_ks1 = recall_at_k_clonotype(y_s1_test, y_s1_pred_lr, k)
+        mse_s1 = mean_squared_error(y_s1_test, y_s1_pred_rf)
+        mse_s1_clonotype, mse_s1_mean = mse_clonotype(y_s1_test, y_s1_pred_rf)
+        recall_ks1 = recall_at_k_clonotype(y_s1_test, y_s1_pred_rf, k)
 
-        mean_clonotype_activation_s1_predicted = y_s1_pred_lr.mean()
+        mean_clonotype_activation_s1_predicted = y_s1_pred_rf.mean()
         mean_clonotype_activation_s1 = y_s1_test.mean()
 
         print(f"Recall@{k} for S1: {recall_ks1:.2f}")
@@ -664,19 +664,19 @@ for k in range(0,7):
         q4_s1 = sorted_indices_s1[-len(sorted_indices_s1) // 4:]  # Top 25% (high responders)
 
         # Compute MSE for the two quartiles
-        mse_s1_low = mean_squared_error(y_s1_test[q1_s1], y_s1_pred_lr[q1_s1])
-        mse_s1_high = mean_squared_error(y_s1_test[q4_s1], y_s1_pred_lr[q4_s1])
+        mse_s1_low = mean_squared_error(y_s1_test[q1_s1], y_s1_pred_rf[q1_s1])
+        mse_s1_high = mean_squared_error(y_s1_test[q4_s1], y_s1_pred_rf[q4_s1])
 
         print(f"MSE for bottom 25% (low-responding clones) in S1: {mse_s1_low:.4f}")
         print(f"MSE for top 25% (high-responding clones) in S1: {mse_s1_high:.4f}")
 
-        print(q1_s1)
-        print(q4_s1)
+        # print(q1_s1)
+        # print(q4_s1)
 
         # --- Standard Evaluation for T1 ---
-        mse_t1 = mean_squared_error(y_t1_test, y_t1_pred_lr)
-        mse_t1_clonotype, mse_t1_mean = mse_clonotype(y_t1_test, y_t1_pred_lr)
-        recall_kt1 = recall_at_k_clonotype(y_t1_test, y_t1_pred_lr, k)
+        mse_t1 = mean_squared_error(y_t1_test, y_t1_pred_rf)
+        mse_t1_clonotype, mse_t1_mean = mse_clonotype(y_t1_test, y_t1_pred_rf)
+        recall_kt1 = recall_at_k_clonotype(y_t1_test, y_t1_pred_rf, k)
 
         mean_clonotype_activation_t1 = y_t1_test.mean()
         mean_clonotype_activation_t1_predicted = y_t1_pred_lr.mean()
@@ -693,8 +693,8 @@ for k in range(0,7):
         q1_t1 = sorted_indices_t1[: len(sorted_indices_t1) // 4]  # Bottom 25%
         q4_t1 = sorted_indices_t1[-len(sorted_indices_t1) // 4:]  # Top 25%
 
-        mse_t1_low = mean_squared_error(y_t1_test[q1_t1], y_t1_pred_lr[q1_t1])
-        mse_t1_high = mean_squared_error(y_t1_test[q4_t1], y_t1_pred_lr[q4_t1])
+        mse_t1_low = mean_squared_error(y_t1_test[q1_t1], y_t1_pred_rf[q1_t1])
+        mse_t1_high = mean_squared_error(y_t1_test[q4_t1], y_t1_pred_rf[q4_t1])
 
         print(f"MSE for bottom 25% (low-responding clones) in T1: {mse_t1_low:.4f}")
         print(f"MSE for top 25% (high-responding clones) in T1: {mse_t1_high:.4f}")
