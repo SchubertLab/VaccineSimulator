@@ -159,9 +159,9 @@ adata_list = [adata_PCA, adata_deepTCR, adata_mvTCR, adata_deepTCR_PCA, adata_mv
 embeddings = ['X_pca', 'deepTCR_VAE_dim64', 'X_mvTCR', 'emb_deepTCR_PCA', 'emb_mvTCR_deepTCR', 'emb_mvTCR_PCA', 'emb_mvTCR_deepTCR_PCA']
 
 oversampling = False
-linreg = True
+linreg = False
 gbr = False
-rf = False
+rf = True
 
 
 for k in range(0,7):
@@ -439,7 +439,7 @@ for k in range(0,7):
 
     print(f"MSE for bottom 25% (low-responding clones) in T1: {mse_t1_low:.4f}")
     print(f"MSE for top 25% (high-responding clones) in T1: {mse_t1_high:.4f}")
-    print(f"Mean Clonotype Activation (T1) Predicted: {mean_clonotype_activation_t1_predicted:.4f}")
+    # print(f"Mean Clonotype Activation (T1) Predicted: {mean_clonotype_activation_t1_predicted:.4f}")
 
 
 

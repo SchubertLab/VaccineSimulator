@@ -161,7 +161,7 @@ adata_mvTCR_deepTCR_PCA = sc.read_h5ad('../../../data/combined/02_dex_annotated_
 adata_list = [adata_PCA, adata_deepTCR, adata_mvTCR, adata_deepTCR_PCA, adata_mvTCR_deepTCR, adata_mvTCR_PCA, adata_mvTCR_deepTCR_PCA]
 embeddings = ['X_pca', 'deepTCR_VAE_dim64', 'X_mvTCR', 'emb_deepTCR_PCA', 'emb_mvTCR_deepTCR', 'emb_mvTCR_PCA', 'emb_mvTCR_deepTCR_PCA']
 
-oversampling = False
+oversampling = True
 linreg = True
 gbr = False
 rf = False
@@ -264,12 +264,12 @@ for k in range(0,7):
 
         k_smogn = 5
         samp_method_smogn = 'extreme'
-        rel_thres_smogn = 0.6
+        rel_thres_smogn = 0.5
 
         rg_mtrx = [
             [0.0, 0, 0],    # At score 0.0, relevance is 0 (not minority)
-            [0.69, 0, 0],   # Up to 0.59, relevance stays 0
-            [0.7, 1, 0],    # At 0.6, relevance jumps to 1 (minority)
+            [0.5, 0, 0],   # Up to 0.59, relevance stays 0
+            [0.5001, 1, 0],    # At 0.6, relevance jumps to 1 (minority)
             [3, 1, 0]     # Up to 1.0, relevance remains 1
         ]
 

@@ -43,8 +43,6 @@ def recall_at_k(y_true, y_pred, k):
     recall_k = len(intersection) / k
     return recall_k
 
-
-
 def aggregate_predictions_by_clonotype(y_pred):
     """
     Aggregate responses by clonotype.
@@ -55,7 +53,10 @@ def aggregate_predictions_by_clonotype(y_pred):
     Returns:
         dict: A dictionary mapping each clonotype to its predicted responses.
     """
-    test_clonotype_labels = unique_clonotypes_aggregated[test_mask]  # Get the clonotype labels for the test set
+    test_mask = np.isin(unique_clonotypes_aggregated, test_clonotypes)
+    # Get clonotype labels for test set
+    test_clonotype_labels = unique_clonotypes_aggregated[test_mask]
+
 
 
     # Create an empty dictionary to store predictions for each clonotype
@@ -125,7 +126,10 @@ def mse_clonotype(y_pred, y_true):
     """
 
     # Get the clonotype labels for the test set (assumed to be pre-defined)
-    test_clonotype_labels = unique_clonotypes_aggregated[test_mask]  # Make sure test_mask is defined
+    test_mask = np.isin(unique_clonotypes_aggregated, test_clonotypes)
+    # Get clonotype labels for test set
+    test_clonotype_labels = unique_clonotypes_aggregated[test_mask]
+    pred_responses_by_clonotype = aggregate_predictions_by_clonotype(y_pred)
      
     # Create an empty dictionary to store predictions and MSE for each clonotype
     predictions_by_clonotype = {}
@@ -151,7 +155,6 @@ def mse_clonotype(y_pred, y_true):
     mean_mse = np.mean(list(mse_by_clonotype.values()))
 
     return mse_by_clonotype, mean_mse
-
 
 
 
@@ -216,11 +219,14 @@ adata_mvTCR_deepTCR_PCA = sc.read_h5ad('../../../data/combined/02_dex_annotated_
 adata_list = [adata_PCA, adata_deepTCR, adata_mvTCR, adata_deepTCR_PCA, adata_mvTCR_deepTCR, adata_mvTCR_PCA, adata_mvTCR_deepTCR_PCA]
 embeddings = ['X_pca', 'deepTCR_VAE_dim64', 'X_mvTCR', 'emb_deepTCR_PCA', 'emb_mvTCR_deepTCR', 'emb_mvTCR_PCA', 'emb_mvTCR_deepTCR_PCA']
 
-oversampling = True
+oversampling = False
+linreg = False
+gbr = False
+rf = True
 
 for k in range(0,7):
     adata = adata_list[k]
-    print(embeddings[k])
+    # print(embeddings[k])
 
     # filter out cells that we can't use
     adata = adata[~adata.obs.clone_id.isna()]
@@ -249,10 +255,6 @@ for k in range(0,7):
 
 
     # Map S1 and T1 responses to corresponding P1 clones to ensure that only clones with corresponding targets are included
-    """s1 = np.array([S1_targets[np.where(S1_clones == cid)[0][0]] if cid in S1_clones else np.nan for cid in P1_clones])
-    t1 = np.array([T1_targets[np.where(T1_clones == cid)[0][0]] if cid in T1_clones else np.nan for cid in P1_clones])
-    p1 = np.array([P1_targets[np.where(P1_clones == cid)[0][0]] if cid in P1_clones else np.nan for cid in P1_clones])"""
-
     s1 = np.array([np.mean(S1_targets[np.where(S1_clones == cid)])
                 if cid in S1_clones else np.nan for cid in P1_clones])
 
@@ -263,71 +265,56 @@ for k in range(0,7):
                 if cid in P1_clones else np.nan for cid in P1_clones])
 
     # Remove clones without corresponding targets
-    valid_indices = ~np.isnan(s1) & ~np.isnan(t1)& ~np.isnan(p1)
+    valid_indices = ~np.isnan(s1) & ~np.isnan(t1)
     X_p1, s1, t1, p1 = X_p1[valid_indices], s1[valid_indices], t1[valid_indices], p1[valid_indices]
     P1_clones = P1_clones[valid_indices]
     unique_clonotypes_aggregated = np.unique(P1_clones) # Unique clonotypes in the aggregated data
 
-
-    # X_aggregated (features), P1_clones (clonotype labels), 
-    # y_s1_aggregated (true target values for S1), y_p1_aggregated (true target values for P1),
-    # y_s1_pred (predicted values for each cell), and y_p1_pred (predictions for each cell).
-    # Recreate aggregated arrays aligned with unique clonotypes
-    X_aggregated = []  # features
-    y_s1_aggregated = [] # target values for s1
-    y_t1_aggregated = []
-    y_p1_aggregated = []
-    X_s1_aggregated = []  # features S1 
-    X_p1_aggregated = []  # features P1
-    X_t1_aggregated = []  # features T1
-
-    # Step 1: Split the clonotypes into train, test, and eval sets
+    #  Split the clonotypes into train, test, and eval sets
     train_clonotypes, temp_clonotypes = train_test_split(unique_clonotypes_aggregated, test_size=0.3, random_state=42)
 
     # Then split temp_clonotypes into test and eval (50% each)
     test_clonotypes, eval_clonotypes = train_test_split(temp_clonotypes, test_size=0.5, random_state=42)
 
-    # Create masks for train, test, and eval sets based on clonotypes
-    train_mask = np.isin(unique_clonotypes_aggregated, train_clonotypes)
-    test_mask = np.isin(unique_clonotypes_aggregated, test_clonotypes)
-    eval_mask = np.isin(unique_clonotypes_aggregated, eval_clonotypes)
+    test_mask = np.array([clone in test_clonotypes for clone in P1_clones])
 
-    # Step 2: 
-    # Loop to aggregate the features for each clonotype
-    for clone in unique_clonotypes_aggregated:
-        mask = P1_clones == clone  # Select rows matching the current clone for P1
-        X_p1_aggregated.append(X_p1[mask].mean(axis=0))  # Mean of features for P1
-        y_s1_aggregated.append(s1[mask].mean())      # Mean of s1 for the clone
-        y_t1_aggregated.append(t1[mask].mean())      # Mean of t1 for the clone
-        y_p1_aggregated.append(p1[mask].mean())      # Mean of p1 for the clone
+    # Split clone_to_s1, clone_to_t1, and clone_to_p1 based on train_clonotypes and test clonotypes
+    # Keep all cells in training
+    y_s1_train = np.concatenate([S1_targets[np.where(S1_clones == cid)[0]] 
+                                if cid in S1_clones else np.nan for cid in train_clonotypes])
 
-        mask = S1_clones == clone  # Select rows matching the current clone for S1
-        X_s1_aggregated.append(X_s1[mask].mean(axis=0))  # Mean of features for S1
+    y_t1_train = np.concatenate([T1_targets[np.where(T1_clones == cid)[0]] 
+                                if cid in T1_clones else np.nan for cid in train_clonotypes])
 
-        mask = T1_clones == clone  # Select rows matching the current clone for T1
-        X_t1_aggregated.append(X_t1[mask].mean(axis=0))  # Mean of features for T1
+    y_p1_train = np.concatenate([P1_targets[np.where(P1_clones == cid)[0]] 
+                                if cid in P1_clones else np.nan for cid in train_clonotypes])
+        
+    # Compute the mean for each clonotype in the test set
+    y_s1_test = np.array([np.mean(S1_targets[np.where(S1_clones == cid)])
+                if cid in S1_clones else np.nan for cid in test_clonotypes])
+    y_t1_test = np.array([np.mean(T1_targets[np.where(T1_clones == cid)])
+                    if cid in T1_clones else np.nan for cid in test_clonotypes])
+    y_p1_test = np.array([np.mean(P1_targets[np.where(P1_clones == cid)])
+                    if cid in P1_clones else np.nan for cid in test_clonotypes])
+    
+    # Identify valid clones (only clones that exist in P1)
+    valid_clones = set(P1_clones)  # Convert P1_clones to a set for fast lookup
+
+    # Extract features as NumPy arrays (only for clones present in P1)
+    X_p1_train = np.vstack([X_p1[P1_clones == clone] for clone in train_clonotypes if clone in valid_clones])
+    X_s1_train = np.vstack([X_s1[S1_clones == clone] for clone in train_clonotypes if clone in valid_clones & set(S1_clones)])
+    X_t1_train = np.vstack([X_t1[T1_clones == clone] for clone in train_clonotypes if clone in valid_clones & set(T1_clones)])
 
 
-    # Convert lists to arrays
-    X_aggregated = np.array(X_aggregated)
-    y_s1_aggregated = np.array(y_s1_aggregated)
-    y_t1_aggregated = np.array(y_t1_aggregated)
-    y_p1_aggregated = np.array(y_p1_aggregated)
-    X_s1_aggregated = np.array(X_s1_aggregated)
-    X_t1_aggregated = np.array(X_t1_aggregated)
-    X_p1_aggregated = np.array(X_p1_aggregated)
+    # Compute the mean feature vector per clonotype in the test set
+    X_p1_test = np.array([np.mean(X_p1[np.where(P1_clones == cid)], axis=0)
+                        if cid in P1_clones else np.nan for cid in test_clonotypes])
 
-    # Split aggregated data into train and test sets
-    #X_train, X_test = X_aggregated[train_mask], X_aggregated[test_mask]
-    X_p1_train, X_p1_test = X_p1_aggregated[train_mask], X_p1_aggregated[test_mask]
-    X_s1_train, X_s1_test = X_s1_aggregated[train_mask], X_s1_aggregated[test_mask]
-    X_t1_train, X_t1_test = X_t1_aggregated[train_mask], X_t1_aggregated[test_mask]
-    y_s1_train, y_s1_test = y_s1_aggregated[train_mask], y_s1_aggregated[test_mask]
-    y_t1_train, y_t1_test = y_t1_aggregated[train_mask], y_t1_aggregated[test_mask]
-    y_p1_train, y_p1_test = y_p1_aggregated[train_mask], y_p1_aggregated[test_mask]
+    X_s1_test = np.array([np.mean(X_s1[np.where(S1_clones == cid)], axis=0)
+                        if cid in S1_clones else np.nan for cid in test_clonotypes])
 
-    X_s1_test = np.hstack([X_p1_test, X_s1_test])
-    X_t1_test = np.hstack([X_p1_test, X_t1_test])
+    X_t1_test = np.array([np.mean(X_t1[np.where(T1_clones == cid)], axis=0)
+                        if cid in T1_clones else np.nan for cid in test_clonotypes])
 
 
     if oversampling:
@@ -435,20 +422,15 @@ for k in range(0,7):
         y_s1_train = y_s1_resampled
         y_t1_train = y_t1_resampled
 
+    # Ensure y_s1_train is a NumPy array
+    y_s1_train = np.array(y_s1_train)
 
-    # Ot pairing for P1 and S1
-    # Extract target IFN response scores
-    y_p1 = y_p1_train
-    y_s1 = y_s1_train
 
-    # Extract PCA embeddings and target values
-    X_p1 = X_p1_train
-    X_s1 = X_s1_train
+    # Compute cost matrix (Euclidean distance between P1 and S1)
+    cost_matrix_s1 = ot.dist(X_p1_train, X_s1_train, metric='euclidean')
 
-    # Compute cost matrix and solve OT problem
-    cost_matrix_s1 = ot.dist(X_p1, X_s1, metric='euclidean')
-    a_s1 = np.ones(len(X_p1)) / len(X_p1)
-    b_s1 = np.ones(len(X_s1)) / len(X_s1)
+    a_s1 = np.ones(len(X_p1_train)) / len(X_p1_train)
+    b_s1 = np.ones(len(X_s1_train)) / len(X_s1_train)
     transport_plan_s1 = ot.emd(a_s1, b_s1, cost_matrix_s1)
 
     # Extract paired indices
@@ -457,13 +439,14 @@ for k in range(0,7):
     paired_s1_indices = paired_indices_s1[:, 1]
 
     # Prepare training data
-    paired_features_p1_s1 = X_p1[paired_p1_indices_s1]
-    paired_features_s1 = X_s1[paired_s1_indices]
-    paired_targets_s1 = y_s1[paired_s1_indices]
+    paired_features_p1_s1 = X_p1_train[paired_p1_indices_s1]
+    paired_features_s1 = X_s1_train[paired_s1_indices]
+    paired_targets_s1 = y_s1_train[paired_s1_indices]
 
     X_s1_train = np.hstack([paired_features_p1_s1, paired_features_s1])
     y_s1_train = paired_targets_s1 
 
+    X_s1_test = np.hstack([X_p1_test, X_s1_test])
 
     weights_s1 = np.where(y_s1_train > 0.4, 1, 1) 
 
@@ -488,13 +471,13 @@ for k in range(0,7):
     y_t1 = y_t1_train
 
     # Extract PCA embeddings and target values
-    X_p1 = X_p1_train
-    X_t1 = X_t1_train
+    X_p1_train = X_p1_train
+    X_t1_train = X_t1_train
 
     # Compute cost matrix and solve OT problem
-    cost_matrix_t1 = ot.dist(X_p1, X_t1, metric='euclidean')
-    a_t1 = np.ones(len(X_p1)) / len(X_p1)
-    b_t1 = np.ones(len(X_t1)) / len(X_t1)
+    cost_matrix_t1 = ot.dist(X_p1_train, X_t1_train, metric='euclidean')
+    a_t1 = np.ones(len(X_p1_train)) / len(X_p1_train)
+    b_t1 = np.ones(len(X_t1_train)) / len(X_t1_train)
     transport_plan_t1 = ot.emd(a_t1, b_t1, cost_matrix_t1)
 
     # Extract paired indices
@@ -503,17 +486,16 @@ for k in range(0,7):
     paired_t1_indices = paired_indices_t1[:, 1]
 
     # Prepare training data
-    paired_features_p1_t1 = X_p1[paired_p1_indices_t1]
-    paired_features_t1 = X_s1[paired_t1_indices]
-    paired_targets_t1 = y_s1[paired_t1_indices]
+    paired_features_p1_t1 = X_p1_train[paired_p1_indices_t1]
+    paired_features_t1 = X_t1_train[paired_t1_indices]
+    paired_targets_t1 = y_t1[paired_t1_indices]
 
     X_t1_train = np.hstack([paired_features_p1_t1, paired_features_t1])
     y_t1_train = paired_targets_t1 
 
-
+    X_t1_test = np.hstack([X_p1_test, X_t1_test])
 
     weights_t1 = np.where(y_t1_train > 0.4, 1, 1) 
-
 
     # Train the model
     model_lr = LinearRegression()
@@ -530,189 +512,191 @@ for k in range(0,7):
     y_t1_pred_gb = model_gb.predict(X_t1_test)
     y_t1_pred_rf = model_rf.predict(X_t1_test)
 
-    k = 5  # Recall@k setting
 
-    # --- Standard Evaluation ---
-    # Evaluate S1 predictions
-    mse_s1 = mean_squared_error(y_s1_test, y_s1_pred_lr)
-    mse_s1_clonotype, mse_s1_mean = mse_clonotype(y_s1_test, y_s1_pred_lr)
-    recall_ks1 = recall_at_k_clonotype(y_s1_test, y_s1_pred_lr, k)
+    if linreg:
+        k = 5  # Recall@k setting
 
-    mean_clonotype_activation_s1_predicted = y_s1_pred_lr.mean()
-    mean_clonotype_activation_s1 = y_s1_test.mean()
+        # --- Standard Evaluation ---
+        # Evaluate S1 predictions
+        mse_s1 = mean_squared_error(y_s1_test, y_s1_pred_lr)
+        mse_s1_clonotype, mse_s1_mean = mse_clonotype(y_s1_test, y_s1_pred_lr)
+        recall_ks1 = recall_at_k_clonotype(y_s1_test, y_s1_pred_lr, k)
 
-    print(f"Recall@{k} for S1: {recall_ks1:.2f}")
-    print(f"MSE- Mean for S1: {mse_s1}")
-    print(f"MSE- Clonotype mean for S1: {mse_s1_mean}")
-    print(f"Mean Clonotype Activation (S1): {mean_clonotype_activation_s1:.4f}")
-    print(f"Mean Clonotype Activation (S1) Predicted: {mean_clonotype_activation_s1_predicted:.4f}")
+        mean_clonotype_activation_s1_predicted = y_s1_pred_lr.mean()
+        mean_clonotype_activation_s1 = y_s1_test.mean()
 
-    # --- Quartile MSE Analysis for S1 ---
-    # Sort clones by true response level
-    sorted_indices_s1 = np.argsort(y_s1_test)
+        print(f"Recall@{k} for S1: {recall_ks1:.2f}")
+        print(f"MSE- Mean for S1: {mse_s1}")
+        print(f"MSE- Clonotype mean for S1: {mse_s1_mean}")
+        print(f"Mean Clonotype Activation (S1): {mean_clonotype_activation_s1:.4f}")
+        print(f"Mean Clonotype Activation (S1) Predicted: {mean_clonotype_activation_s1_predicted:.4f}")
 
-    # Get quartile indices
-    q1_s1 = sorted_indices_s1[: len(sorted_indices_s1) // 4]  # Bottom 25% (low responders)
-    q4_s1 = sorted_indices_s1[-len(sorted_indices_s1) // 4:]  # Top 25% (high responders)
+        # --- Quartile MSE Analysis for S1 ---
+        # Sort clones by true response level
+        sorted_indices_s1 = np.argsort(y_s1_test)
 
-    # Compute MSE for the two quartiles
-    mse_s1_low = mean_squared_error(y_s1_test[q1_s1], y_s1_pred_lr[q1_s1])
-    mse_s1_high = mean_squared_error(y_s1_test[q4_s1], y_s1_pred_lr[q4_s1])
+        # Get quartile indices
+        q1_s1 = sorted_indices_s1[: len(sorted_indices_s1) // 4]  # Bottom 25% (low responders)
+        q4_s1 = sorted_indices_s1[-len(sorted_indices_s1) // 4:]  # Top 25% (high responders)
 
-    print(f"MSE for bottom 25% (low-responding clones) in S1: {mse_s1_low:.4f}")
-    print(f"MSE for top 25% (high-responding clones) in S1: {mse_s1_high:.4f}")
+        # Compute MSE for the two quartiles
+        mse_s1_low = mean_squared_error(y_s1_test[q1_s1], y_s1_pred_lr[q1_s1])
+        mse_s1_high = mean_squared_error(y_s1_test[q4_s1], y_s1_pred_lr[q4_s1])
 
-    print(q1_s1)
-    print(q4_s1)
+        print(f"MSE for bottom 25% (low-responding clones) in S1: {mse_s1_low:.4f}")
+        print(f"MSE for top 25% (high-responding clones) in S1: {mse_s1_high:.4f}")
 
-    # --- Standard Evaluation for T1 ---
-    mse_t1 = mean_squared_error(y_t1_test, y_t1_pred_lr)
-    mse_t1_clonotype, mse_t1_mean = mse_clonotype(y_t1_test, y_t1_pred_lr)
-    recall_kt1 = recall_at_k_clonotype(y_t1_test, y_t1_pred_lr, k)
+        print(q1_s1)
+        print(q4_s1)
 
-    mean_clonotype_activation_t1 = y_t1_test.mean()
-    mean_clonotype_activation_t1_predicted = y_t1_pred_lr.mean()
+        # --- Standard Evaluation for T1 ---
+        mse_t1 = mean_squared_error(y_t1_test, y_t1_pred_lr)
+        mse_t1_clonotype, mse_t1_mean = mse_clonotype(y_t1_test, y_t1_pred_lr)
+        recall_kt1 = recall_at_k_clonotype(y_t1_test, y_t1_pred_lr, k)
 
-    print(f"Recall@{k} for T1: {recall_kt1:.2f}")
-    print(f"MSE- Mean for T1: {mse_t1}")
-    print(f"MSE- Clonotype mean for T1: {mse_t1_mean}")
-    print(f"Mean Clonotype Activation (T1): {mean_clonotype_activation_t1:.4f}")
-    print(f"Mean Clonotype Activation (T1) Predicted: {mean_clonotype_activation_t1_predicted:.4f}")
+        mean_clonotype_activation_t1 = y_t1_test.mean()
+        mean_clonotype_activation_t1_predicted = y_t1_pred_lr.mean()
 
-    # --- Quartile MSE Analysis for T1 ---
-    sorted_indices_t1 = np.argsort(y_t1_test)
+        print(f"Recall@{k} for T1: {recall_kt1:.2f}")
+        print(f"MSE- Mean for T1: {mse_t1}")
+        print(f"MSE- Clonotype mean for T1: {mse_t1_mean}")
+        print(f"Mean Clonotype Activation (T1): {mean_clonotype_activation_t1:.4f}")
+        print(f"Mean Clonotype Activation (T1) Predicted: {mean_clonotype_activation_t1_predicted:.4f}")
 
-    q1_t1 = sorted_indices_t1[: len(sorted_indices_t1) // 4]  # Bottom 25%
-    q4_t1 = sorted_indices_t1[-len(sorted_indices_t1) // 4:]  # Top 25%
+        # --- Quartile MSE Analysis for T1 ---
+        sorted_indices_t1 = np.argsort(y_t1_test)
 
-    mse_t1_low = mean_squared_error(y_t1_test[q1_t1], y_t1_pred_lr[q1_t1])
-    mse_t1_high = mean_squared_error(y_t1_test[q4_t1], y_t1_pred_lr[q4_t1])
+        q1_t1 = sorted_indices_t1[: len(sorted_indices_t1) // 4]  # Bottom 25%
+        q4_t1 = sorted_indices_t1[-len(sorted_indices_t1) // 4:]  # Top 25%
 
-    print(f"MSE for bottom 25% (low-responding clones) in T1: {mse_t1_low:.4f}")
-    print(f"MSE for top 25% (high-responding clones) in T1: {mse_t1_high:.4f}")
+        mse_t1_low = mean_squared_error(y_t1_test[q1_t1], y_t1_pred_lr[q1_t1])
+        mse_t1_high = mean_squared_error(y_t1_test[q4_t1], y_t1_pred_lr[q4_t1])
 
+        print(f"MSE for bottom 25% (low-responding clones) in T1: {mse_t1_low:.4f}")
+        print(f"MSE for top 25% (high-responding clones) in T1: {mse_t1_high:.4f}")
 
-    k = 5  # Recall@k setting
+    if gbr:
+        k = 5  # Recall@k setting
 
-    # --- Standard Evaluation ---
-    # Evaluate S1 predictions
-    mse_s1 = mean_squared_error(y_s1_test, y_s1_pred_gb)
-    mse_s1_clonotype, mse_s1_mean = mse_clonotype(y_s1_test, y_s1_pred_gb)
-    recall_ks1 = recall_at_k_clonotype(y_s1_test, y_s1_pred_gb, k)
+        # --- Standard Evaluation ---
+        # Evaluate S1 predictions
+        mse_s1 = mean_squared_error(y_s1_test, y_s1_pred_lr)
+        mse_s1_clonotype, mse_s1_mean = mse_clonotype(y_s1_test, y_s1_pred_lr)
+        recall_ks1 = recall_at_k_clonotype(y_s1_test, y_s1_pred_lr, k)
 
-    mean_clonotype_activation_s1_predicted = y_s1_pred_gb.mean()
-    mean_clonotype_activation_s1 = y_s1_test.mean()
+        mean_clonotype_activation_s1_predicted = y_s1_pred_lr.mean()
+        mean_clonotype_activation_s1 = y_s1_test.mean()
 
-    print(f"Recall@{k} for S1: {recall_ks1:.2f}")
-    print(f"MSE- Mean for S1: {mse_s1}")
-    print(f"MSE- Clonotype mean for S1: {mse_s1_mean}")
-    print(f"Mean Clonotype Activation (S1): {mean_clonotype_activation_s1:.4f}")
-    print(f"Mean Clonotype Activation (S1) Predicted: {mean_clonotype_activation_s1_predicted:.4f}")
+        print(f"Recall@{k} for S1: {recall_ks1:.2f}")
+        print(f"MSE- Mean for S1: {mse_s1}")
+        print(f"MSE- Clonotype mean for S1: {mse_s1_mean}")
+        print(f"Mean Clonotype Activation (S1): {mean_clonotype_activation_s1:.4f}")
+        print(f"Mean Clonotype Activation (S1) Predicted: {mean_clonotype_activation_s1_predicted:.4f}")
 
-    # --- Quartile MSE Analysis for S1 ---
-    # Sort clones by true response level
-    sorted_indices_s1 = np.argsort(y_s1_test)
+        # --- Quartile MSE Analysis for S1 ---
+        # Sort clones by true response level
+        sorted_indices_s1 = np.argsort(y_s1_test)
 
-    # Get quartile indices
-    q1_s1 = sorted_indices_s1[: len(sorted_indices_s1) // 4]  # Bottom 25% (low responders)
-    q4_s1 = sorted_indices_s1[-len(sorted_indices_s1) // 4:]  # Top 25% (high responders)
+        # Get quartile indices
+        q1_s1 = sorted_indices_s1[: len(sorted_indices_s1) // 4]  # Bottom 25% (low responders)
+        q4_s1 = sorted_indices_s1[-len(sorted_indices_s1) // 4:]  # Top 25% (high responders)
 
-    # Compute MSE for the two quartiles
-    mse_s1_low = mean_squared_error(y_s1_test[q1_s1], y_s1_pred_gb[q1_s1])
-    mse_s1_high = mean_squared_error(y_s1_test[q4_s1], y_s1_pred_gb[q4_s1])
+        # Compute MSE for the two quartiles
+        mse_s1_low = mean_squared_error(y_s1_test[q1_s1], y_s1_pred_lr[q1_s1])
+        mse_s1_high = mean_squared_error(y_s1_test[q4_s1], y_s1_pred_lr[q4_s1])
 
-    print(f"MSE for bottom 25% (low-responding clones) in S1: {mse_s1_low:.4f}")
-    print(f"MSE for top 25% (high-responding clones) in S1: {mse_s1_high:.4f}")
+        print(f"MSE for bottom 25% (low-responding clones) in S1: {mse_s1_low:.4f}")
+        print(f"MSE for top 25% (high-responding clones) in S1: {mse_s1_high:.4f}")
 
-    print(q1_s1)
-    print(q4_s1)
+        print(q1_s1)
+        print(q4_s1)
 
-    # --- Standard Evaluation for T1 ---
-    mse_t1 = mean_squared_error(y_t1_test, y_t1_pred_gb)
-    mse_t1_clonotype, mse_t1_mean = mse_clonotype(y_t1_test, y_t1_pred_gb)
-    recall_kt1 = recall_at_k_clonotype(y_t1_test, y_t1_pred_gb, k)
+        # --- Standard Evaluation for T1 ---
+        mse_t1 = mean_squared_error(y_t1_test, y_t1_pred_lr)
+        mse_t1_clonotype, mse_t1_mean = mse_clonotype(y_t1_test, y_t1_pred_lr)
+        recall_kt1 = recall_at_k_clonotype(y_t1_test, y_t1_pred_lr, k)
 
-    mean_clonotype_activation_t1 = y_t1_test.mean()
-    mean_clonotype_activation_t1_predicted = y_t1_pred_gb.mean()
+        mean_clonotype_activation_t1 = y_t1_test.mean()
+        mean_clonotype_activation_t1_predicted = y_t1_pred_lr.mean()
 
-    print(f"Recall@{k} for T1: {recall_kt1:.2f}")
-    print(f"MSE- Mean for T1: {mse_t1}")
-    print(f"MSE- Clonotype mean for T1: {mse_t1_mean}")
-    print(f"Mean Clonotype Activation (T1): {mean_clonotype_activation_t1:.4f}")
-    print(f"Mean Clonotype Activation (T1) Predicted: {mean_clonotype_activation_t1_predicted:.4f}")
+        print(f"Recall@{k} for T1: {recall_kt1:.2f}")
+        print(f"MSE- Mean for T1: {mse_t1}")
+        print(f"MSE- Clonotype mean for T1: {mse_t1_mean}")
+        print(f"Mean Clonotype Activation (T1): {mean_clonotype_activation_t1:.4f}")
+        print(f"Mean Clonotype Activation (T1) Predicted: {mean_clonotype_activation_t1_predicted:.4f}")
 
-    # --- Quartile MSE Analysis for T1 ---
-    sorted_indices_t1 = np.argsort(y_t1_test)
+        # --- Quartile MSE Analysis for T1 ---
+        sorted_indices_t1 = np.argsort(y_t1_test)
 
-    q1_t1 = sorted_indices_t1[: len(sorted_indices_t1) // 4]  # Bottom 25%
-    q4_t1 = sorted_indices_t1[-len(sorted_indices_t1) // 4:]  # Top 25%
+        q1_t1 = sorted_indices_t1[: len(sorted_indices_t1) // 4]  # Bottom 25%
+        q4_t1 = sorted_indices_t1[-len(sorted_indices_t1) // 4:]  # Top 25%
 
-    mse_t1_low = mean_squared_error(y_t1_test[q1_t1], y_t1_pred_gb[q1_t1])
-    mse_t1_high = mean_squared_error(y_t1_test[q4_t1], y_t1_pred_gb[q4_t1])
+        mse_t1_low = mean_squared_error(y_t1_test[q1_t1], y_t1_pred_lr[q1_t1])
+        mse_t1_high = mean_squared_error(y_t1_test[q4_t1], y_t1_pred_lr[q4_t1])
 
-    print(f"MSE for bottom 25% (low-responding clones) in T1: {mse_t1_low:.4f}")
-    print(f"MSE for top 25% (high-responding clones) in T1: {mse_t1_high:.4f}")
+        print(f"MSE for bottom 25% (low-responding clones) in T1: {mse_t1_low:.4f}")
+        print(f"MSE for top 25% (high-responding clones) in T1: {mse_t1_high:.4f}")
 
+    if rf:
+        k = 5  # Recall@k setting
 
-    k = 5  # Recall@k setting
+        # --- Standard Evaluation ---
+        # Evaluate S1 predictions
+        mse_s1 = mean_squared_error(y_s1_test, y_s1_pred_lr)
+        mse_s1_clonotype, mse_s1_mean = mse_clonotype(y_s1_test, y_s1_pred_lr)
+        recall_ks1 = recall_at_k_clonotype(y_s1_test, y_s1_pred_lr, k)
 
-    # --- Standard Evaluation ---
-    # Evaluate S1 predictions
-    mse_s1 = mean_squared_error(y_s1_test, y_s1_pred_rf)
-    mse_s1_clonotype, mse_s1_mean = mse_clonotype(y_s1_test, y_s1_pred_rf)
-    recall_ks1 = recall_at_k_clonotype(y_s1_test, y_s1_pred_rf, k)
+        mean_clonotype_activation_s1_predicted = y_s1_pred_lr.mean()
+        mean_clonotype_activation_s1 = y_s1_test.mean()
 
-    mean_clonotype_activation_s1_predicted = y_s1_pred_rf.mean()
-    mean_clonotype_activation_s1 = y_s1_test.mean()
+        print(f"Recall@{k} for S1: {recall_ks1:.2f}")
+        print(f"MSE- Mean for S1: {mse_s1}")
+        print(f"MSE- Clonotype mean for S1: {mse_s1_mean}")
+        print(f"Mean Clonotype Activation (S1): {mean_clonotype_activation_s1:.4f}")
+        print(f"Mean Clonotype Activation (S1) Predicted: {mean_clonotype_activation_s1_predicted:.4f}")
 
-    print(f"Recall@{k} for S1: {recall_ks1:.2f}")
-    print(f"MSE- Mean for S1: {mse_s1}")
-    print(f"MSE- Clonotype mean for S1: {mse_s1_mean}")
-    print(f"Mean Clonotype Activation (S1): {mean_clonotype_activation_s1:.4f}")
-    print(f"Mean Clonotype Activation (S1) Predicted: {mean_clonotype_activation_s1_predicted:.4f}")
+        # --- Quartile MSE Analysis for S1 ---
+        # Sort clones by true response level
+        sorted_indices_s1 = np.argsort(y_s1_test)
 
-    # --- Quartile MSE Analysis for S1 ---
-    # Sort clones by true response level
-    sorted_indices_s1 = np.argsort(y_s1_test)
+        # Get quartile indices
+        q1_s1 = sorted_indices_s1[: len(sorted_indices_s1) // 4]  # Bottom 25% (low responders)
+        q4_s1 = sorted_indices_s1[-len(sorted_indices_s1) // 4:]  # Top 25% (high responders)
 
-    # Get quartile indices
-    q1_s1 = sorted_indices_s1[: len(sorted_indices_s1) // 4]  # Bottom 25% (low responders)
-    q4_s1 = sorted_indices_s1[-len(sorted_indices_s1) // 4:]  # Top 25% (high responders)
+        # Compute MSE for the two quartiles
+        mse_s1_low = mean_squared_error(y_s1_test[q1_s1], y_s1_pred_lr[q1_s1])
+        mse_s1_high = mean_squared_error(y_s1_test[q4_s1], y_s1_pred_lr[q4_s1])
 
-    # Compute MSE for the two quartiles
-    mse_s1_low = mean_squared_error(y_s1_test[q1_s1], y_s1_pred_rf[q1_s1])
-    mse_s1_high = mean_squared_error(y_s1_test[q4_s1], y_s1_pred_rf[q4_s1])
+        print(f"MSE for bottom 25% (low-responding clones) in S1: {mse_s1_low:.4f}")
+        print(f"MSE for top 25% (high-responding clones) in S1: {mse_s1_high:.4f}")
 
-    print(f"MSE for bottom 25% (low-responding clones) in S1: {mse_s1_low:.4f}")
-    print(f"MSE for top 25% (high-responding clones) in S1: {mse_s1_high:.4f}")
+        print(q1_s1)
+        print(q4_s1)
 
-    print(q1_s1)
-    print(q4_s1)
+        # --- Standard Evaluation for T1 ---
+        mse_t1 = mean_squared_error(y_t1_test, y_t1_pred_lr)
+        mse_t1_clonotype, mse_t1_mean = mse_clonotype(y_t1_test, y_t1_pred_lr)
+        recall_kt1 = recall_at_k_clonotype(y_t1_test, y_t1_pred_lr, k)
 
-    # --- Standard Evaluation for T1 ---
-    mse_t1 = mean_squared_error(y_t1_test, y_t1_pred_rf)
-    mse_t1_clonotype, mse_t1_mean = mse_clonotype(y_t1_test, y_t1_pred_rf)
-    recall_kt1 = recall_at_k_clonotype(y_t1_test, y_t1_pred_rf, k)
+        mean_clonotype_activation_t1 = y_t1_test.mean()
+        mean_clonotype_activation_t1_predicted = y_t1_pred_lr.mean()
 
-    mean_clonotype_activation_t1 = y_t1_test.mean()
-    mean_clonotype_activation_t1_predicted = y_t1_pred_rf.mean()
+        print(f"Recall@{k} for T1: {recall_kt1:.2f}")
+        print(f"MSE- Mean for T1: {mse_t1}")
+        print(f"MSE- Clonotype mean for T1: {mse_t1_mean}")
+        print(f"Mean Clonotype Activation (T1): {mean_clonotype_activation_t1:.4f}")
+        print(f"Mean Clonotype Activation (T1) Predicted: {mean_clonotype_activation_t1_predicted:.4f}")
 
-    print(f"Recall@{k} for T1: {recall_kt1:.2f}")
-    print(f"MSE- Mean for T1: {mse_t1}")
-    print(f"MSE- Clonotype mean for T1: {mse_t1_mean}")
-    print(f"Mean Clonotype Activation (T1): {mean_clonotype_activation_t1:.4f}")
-    print(f"Mean Clonotype Activation (T1) Predicted: {mean_clonotype_activation_t1_predicted:.4f}")
+        # --- Quartile MSE Analysis for T1 ---
+        sorted_indices_t1 = np.argsort(y_t1_test)
 
-    # --- Quartile MSE Analysis for T1 ---
-    sorted_indices_t1 = np.argsort(y_t1_test)
+        q1_t1 = sorted_indices_t1[: len(sorted_indices_t1) // 4]  # Bottom 25%
+        q4_t1 = sorted_indices_t1[-len(sorted_indices_t1) // 4:]  # Top 25%
 
-    q1_t1 = sorted_indices_t1[: len(sorted_indices_t1) // 4]  # Bottom 25%
-    q4_t1 = sorted_indices_t1[-len(sorted_indices_t1) // 4:]  # Top 25%
+        mse_t1_low = mean_squared_error(y_t1_test[q1_t1], y_t1_pred_lr[q1_t1])
+        mse_t1_high = mean_squared_error(y_t1_test[q4_t1], y_t1_pred_lr[q4_t1])
 
-    mse_t1_low = mean_squared_error(y_t1_test[q1_t1], y_t1_pred_rf[q1_t1])
-    mse_t1_high = mean_squared_error(y_t1_test[q4_t1], y_t1_pred_rf[q4_t1])
-
-    print(f"MSE for bottom 25% (low-responding clones) in T1: {mse_t1_low:.4f}")
-    print(f"MSE for top 25% (high-responding clones) in T1: {mse_t1_high:.4f}")
+        print(f"MSE for bottom 25% (low-responding clones) in T1: {mse_t1_low:.4f}")
+        print(f"MSE for top 25% (high-responding clones) in T1: {mse_t1_high:.4f}")
 
 

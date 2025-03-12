@@ -224,14 +224,14 @@ for k in range(0,7):
     print(f"Mean Clonotype Activation (T1): {mean_clonotype_activation_t1:.4f}")
     print(f"Mean Clonotype Activation (T1) Predicted: {mean_clonotype_activation_t1_predicted:.4f}")
 
-    print(f"{recall_ks1:.2f}")
-    print(f"{mse_s1:.4f}")
-    print(f"{mean_clonotype_activation_s1:.4f}")
-    print(f"{mean_clonotype_activation_s1_predicted:.4f}")
+    # print(f"{recall_ks1:.2f}")
+    # print(f"{mse_s1:.4f}")
+    # print(f"{mean_clonotype_activation_s1:.4f}")
+    # print(f"{mean_clonotype_activation_s1_predicted:.4f}")
 
-    print(f"{recall_kt1:.2f}")
-    print(f"{mse_t1:.4f}")
-    print(f"{mean_clonotype_activation_t1:.4f}")
-    print(f"{mean_clonotype_activation_t1_predicted:.4f}")
+    # print(f"{recall_kt1:.2f}")
+    # print(f"{mse_t1:.4f}")
+    # print(f"{mean_clonotype_activation_t1:.4f}")
+    # print(f"{mean_clonotype_activation_t1_predicted:.4f}")
 
 
